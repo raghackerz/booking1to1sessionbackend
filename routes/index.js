@@ -30,7 +30,7 @@ router.get("/searchmentor", authenticateToken, (req, res) => {
   }
 
   dbConnect
-    .collection("Members")
+    .collection("Mentors")
     .find(query)
     .toArray((err, result) => {
       if (err) {
