@@ -1,9 +1,23 @@
-let express = require("express")
+const express = require("express")
 let router = express.Router();
+const jwt = require('jsonwebtoken')
 const dbo = require('../db/conn');
 
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  console.log(authHeader);
+  const token = authHeader && authHeader.split(' ')[1]
+  if (token == null) return res.status(400).send("Invalid Token")
 
-router.get("/searchmentor", (req, res) => {
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, email) => {
+    console.log(err)
+    if (err) return res.status(400).send("Invalid Token")
+    req.email = email
+    next()
+  })
+}
+
+router.get("/searchmentor", authenticateToken, (req, res) => {
   /*
   * format of req
   * req : {
@@ -16,7 +30,7 @@ router.get("/searchmentor", (req, res) => {
   }
 
   dbConnect
-    .collection("Mentors")
+    .collection("Members")
     .find(query)
     .toArray((err, result) => {
       if (err) {
@@ -27,19 +41,69 @@ router.get("/searchmentor", (req, res) => {
       }
     })
 });
-router.get("/signup", (req, res) => {
-  res.send({ message: "signup" });
+
+router.get("/signin", (req, res) => {
+  //If email or password is not present in the call
+  if (!req.body.email || !req.body.password) return res.status(400).send("Email or Password is incorrect")
+
+  //Searching for email and verify that password is correct
+  const dbConnect = dbo.getDb();
+  const query = {
+    email: req.body?.email
+  }
+
+  dbConnect
+    .collection("Authentication")
+    .find(query)
+    .toArray((err, result) => {
+      if (err) {
+        return res.status(400).send("Email is not registered")
+      }
+      else {
+        if (result[0].password !== req.body.password)
+          return res.status(400).send("Password is Incorrect")
+      }
+    })
+
+  //User Authentication succesful
+
+  const accessToken = jwt.sign(query, process.env.ACCESS_TOKEN_SECRET)
+
+  res.json({ accessToken: accessToken });
 });
-router.get("/getuserdetail", (req, res) => {
+
+//sign up
+router.get("/signup", (req, res) => {
+  console.log(req)
+  if (!req.body.email || !req.body.password) return res.status(400).send("Email or Password is not Provided")
+
+  const dbConnect = dbo.getDb();
+  const insertData = {
+    email: req.body.email,
+    password: req.body.password
+  }
+
+  dbConnect
+    .collection("Authentication")
+    .insertOne(insertData, (err, _result) => {
+      if (err) {
+        return res.status(400).send("Some Error Occured");
+      }
+      else {
+        return res.status(204).send("User Succesfully Registered")
+      }
+    })
+})
+router.get("/getuserdetail", authenticateToken, (req, res) => {
   res.send({ message: "getuserdetail" });
 });
-router.post("/postnotification", (req, res) => {
+router.post("/postnotification", authenticateToken, (req, res) => {
   res.send({ message: "Post notification" });
 });
-router.get("/getnotification", (req, res) => {
+router.get("/getnotification", authenticateToken, (req, res) => {
   res.send({ message: "get notification" });
 });
-router.get("/booksession", (req, res) => {
+router.get("/booksession", authenticateToken, (req, res) => {
   res.send({ message: "booksession" });
 });
 
@@ -137,5 +201,6 @@ router.get("/delete", (req, res) => {
       }
     });
 });
+
 
 module.exports = router;
